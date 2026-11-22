@@ -1,5 +1,6 @@
 import { modules, scenarios } from './content.mjs';
-import { openRainTransition, wireChapterTilt, wireInteriorScroll, wireRipples, wireSmoothScroll } from './motion.mjs';
+import { openRainTransition, wireChapterTilt, wireInteriorScroll, wireSmoothScroll } from './motion.mjs';
+import { wireRipples } from './ripples.mjs';
 import { changeProgress, classify, decodeProgress, emptyProgress, formatPrompt, nextStep, scoreQuiz, storageKey, summarize } from './model.mjs';
 
 const $ = (selector, root = document) => root.querySelector(selector);

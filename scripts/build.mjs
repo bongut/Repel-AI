@@ -10,7 +10,7 @@ export const dist = resolve(root, 'dist');
 export async function build() {
   const assets = join(dist, 'assets');
   await mkdir(assets, { recursive: true });
-  for (const file of ['app.mjs', 'content.mjs', 'field.mjs', 'model.mjs', 'motion.mjs', 'scene.mjs', 'style.css']) {
+  for (const file of ['app.mjs', 'content.mjs', 'field.mjs', 'model.mjs', 'motion.mjs', 'ripples.mjs', 'scene.mjs', 'style.css']) {
     await copyFile(join(root, 'src', file), join(assets, file));
   }
   await writeFile(join(assets, 'field.png'), makeFallback());
