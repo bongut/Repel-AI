@@ -7,8 +7,8 @@ import { makeFallback } from './fallback.mjs';
 
 const dev = process.argv.includes('--dev');
 const port = Number(process.env.FORM_PORT ?? '4173');
-const asset = /^\/assets\/([\w-]+\.(?:css|mjs|png))$/;
-const type = { '.css': 'text/css; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.png': 'image/png' };
+const asset = /^\/assets\/([\w-]+\.(?:css|mjs|png)|fonts\/[\w-]+\.(?:woff2|txt))$/;
+const type = { '.css': 'text/css; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.png': 'image/png', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8' };
 const fallback = dev ? makeFallback() : null;
 
 const server = createServer(async (request, response) => {

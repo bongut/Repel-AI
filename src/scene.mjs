@@ -1,4 +1,5 @@
 import { makeCanopy, project } from './field.mjs';
+import { waveOffset } from './ripples.mjs';
 
 const framedView = new WeakMap();
 const smooth = value => {
@@ -6,7 +7,7 @@ const smooth = value => {
   return t * t * (3 - 2 * t);
 };
 
-export function setupPortalWeather(reduced) {
+export function setupPortalWeather(reduced, ripples) {
   const canvas = document.createElement('canvas');
   let context;
   try { context = canvas.getContext('2d'); } catch { return () => {}; }
@@ -23,6 +24,7 @@ export function setupPortalWeather(reduced) {
   const cards = curriculum ? [...curriculum.querySelectorAll('.chapter')] : [];
   const orbit = matchMedia('(min-width: 53rem) and (min-height: 40rem)');
   const rain = [];
+  const offset = { x: 0, y: 0 };
   let width = 0;
   let height = 0;
   let frame = 0;
@@ -56,7 +58,7 @@ export function setupPortalWeather(reduced) {
         x: (index + .2 + Math.random() * .6) * width / count,
         y: Math.random() * (height + 100) - 100,
         speed: 180 + Math.random() * 200,
-        vx: 0, vy: 0, bounced: false,
+        vx: 0, vy: 0, bounced: false, splash: null,
         bit: index % 2
       });
     }
@@ -68,6 +70,48 @@ export function setupPortalWeather(reduced) {
     if (column >= 0 && column < surface.length) surface[column] = Math.min(surface[column], y);
   }
 
+  function recycleDrop(drop) {
+    drop.y = -20 - Math.random() * 115;
+    drop.x = Math.random() * width;
+    drop.vx = drop.vy = 0;
+    drop.bounced = false;
+    drop.splash = null;
+  }
+
+  function drawSplash(drop, waves) {
+    const splash = drop.splash;
+    const age = elapsed - splash.start;
+    // The impact digit takes the highest arc. Two smaller droplets fan out beside it.
+    for (const side of [0, -1, 1]) {
+      const riseSpeed = splash.lift * (side === 0 ? 1 : .65);
+      const duration = 2 * riseSpeed / 1000;
+      if (age >= duration) continue;
+      const x = drop.x + age * (splash.drift + side * splash.spread);
+      const y = drop.y - riseSpeed * age + 500 * age * age;
+      waveOffset(waves, x, y, offset);
+      context.font = side === 0 ? '13px monospace' : '9px monospace';
+      context.fillStyle = side === 0 ? '#c8f4a5' : '#9bd6bf';
+      context.globalAlpha = .78 * (1 - (age / duration) ** 2);
+      context.fillText(side === -1 ? 1 - splash.bit : splash.bit, x + offset.x, y + offset.y);
+    }
+    if (age >= 2 * splash.lift / 1000) recycleDrop(drop);
+  }
+
+  function illuminateWaves(waves) {
+    for (const { x, y, radius, strength } of waves) {
+      if (strength < .01 || x + radius < 0 || x - radius > width || y + radius < 0 || y - radius > height) continue;
+      const light = context.createRadialGradient(x, y, radius * .34, x, y, radius);
+      light.addColorStop(0, 'transparent');
+      light.addColorStop(.20, 'rgb(122 202 192 / 0.045)');
+      light.addColorStop(.33, 'transparent');
+      light.addColorStop(.50, 'rgb(176 221 196 / 0.08)');
+      light.addColorStop(.82, 'transparent');
+      context.globalAlpha = strength;
+      context.fillStyle = light;
+      context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    }
+  }
+
   function draw(time) {
     const dt = Math.min(.05, (time - (previous || time)) / 1000);
     previous = time;
@@ -75,7 +119,9 @@ export function setupPortalWeather(reduced) {
     const root = document.scrollingElement;
     const target = Math.min(1, Math.max(0, scrollY / Math.max(1, root.scrollHeight - root.clientHeight)));
     progress += (target - progress) * (1 - Math.exp(-7 * dt));
+    const waves = ripples.readWaves(time);
     context.clearRect(0, 0, width, height);
+    illuminateWaves(waves);
     context.textAlign = 'center';
     context.textBaseline = 'middle';
     surface.fill(Infinity);
@@ -134,18 +180,20 @@ export function setupPortalWeather(reduced) {
         context.fillStyle = digit.bit ? '#d5f492' : '#85c6bc';
         context.globalAlpha = digit.light * strength;
         context.font = '600 ' + Math.round(digit.size) + 'px monospace';
-        context.fillText(digit.bit, x, y);
+        waveOffset(waves, x, y, offset);
+        context.fillText(digit.bit, x + offset.x, y + offset.y);
       }
     }
-    context.font = '13px monospace';
+    const ground = height - 7;
     for (const drop of rain) {
+      if (drop.splash) { drawSplash(drop, waves); continue; }
       const previousY = drop.y;
       if (drop.bounced) drop.vy = Math.min(drop.speed, drop.vy + 1050 * dt);
       drop.y += (drop.bounced ? drop.vy : drop.speed) * dt;
       drop.x += drop.vx * dt;
       const column = Math.floor(drop.x / 12);
       const impact = surface[column];
-      if (!drop.bounced && previousY <= impact && drop.y >= impact && impact > 0) {
+      if (!drop.bounced && previousY <= impact && drop.y >= impact && impact > 0 && impact < ground) {
         const left = surface[column - 1];
         const right = surface[column + 1];
         const downhill = Number.isFinite(left) && Number.isFinite(right) ? Math.sign(right - left) : 0;
@@ -154,19 +202,32 @@ export function setupPortalWeather(reduced) {
         drop.vx = (downhill || (drop.x < width / 2 ? -1 : 1)) * drop.speed * .72;
         drop.bounced = true;
       }
-      if (drop.y > height + 110 || drop.x < -40 || drop.x > width + 40) {
-        drop.y = -20 - Math.random() * 115;
-        drop.x = Math.random() * width;
-        drop.vx = 0;
-        drop.bounced = false;
+      if (drop.x < -40 || drop.x > width + 40) { recycleDrop(drop); continue; }
+      if (drop.y >= ground) {
+        const impactSpeed = drop.bounced ? drop.vy : drop.speed;
+        const pastImpact = impactSpeed > 0 ? Math.min(dt, (drop.y - ground) / impactSpeed) : 0;
+        drop.x -= drop.vx * pastImpact;
+        drop.y = ground;
+        drop.splash = {
+          start: elapsed - pastImpact,
+          lift: Math.max(135, Math.min(220, impactSpeed * .7)),
+          drift: drop.vx * .28 + (Math.random() - .5) * 75,
+          spread: 65 + Math.random() * 50,
+          bit: (drop.bit + Math.floor(elapsed * 9)) % 2
+        };
+        drawSplash(drop, waves);
+        continue;
       }
+      context.font = '13px monospace';
       const edge = Math.abs(.5 - drop.x / width) * 2;
       for (let tail = 0; tail < (drop.bounced ? 3 : 6); tail++) {
         context.fillStyle = tail < 2 ? '#c8f4a5' : '#80b5a5';
         context.globalAlpha = (.17 + edge * .42 + (drop.bounced ? .16 : 0)) * (1 - tail / 6);
         const bit = (drop.bit + tail + Math.floor(elapsed * 9)) % 2;
-        context.fillText(bit, drop.x - drop.vx * tail * .045,
-          drop.y - (drop.bounced ? drop.vy * .045 : 18) * tail);
+        const x = drop.x - drop.vx * tail * .045;
+        const y = drop.y - (drop.bounced ? drop.vy * .045 : 18) * tail;
+        waveOffset(waves, x, y, offset);
+        context.fillText(bit, x + offset.x, y + offset.y);
       }
     }
     context.globalAlpha = 1;
@@ -189,7 +250,7 @@ export function setupPortalWeather(reduced) {
   };
 }
 
-export function setupScene(host) {
+export function setupScene(host, ripples) {
   const canvas = document.createElement('canvas');
   let context;
   try { context = canvas.getContext('2d', { alpha: true }); } catch { return () => {}; }
@@ -199,6 +260,7 @@ export function setupScene(host) {
   const controller = new AbortController();
   const { signal } = controller;
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
+  const offset = { x: 0, y: 0 };
   let points = [];
   let width = 0;
   let height = 0;
@@ -245,17 +307,20 @@ export function setupScene(host) {
     context.textBaseline = 'middle';
     const rotation = yaw + progress * Math.PI * 1.55;
     framedView.set(host, { progress, yaw: rotation });
+    const waves = quiet ? [] : ripples.readWaves(time);
+    const box = waves.length ? canvas.getBoundingClientRect() : null;
     for (const point of points) {
       const glyph = project(point, progress, width, height, rotation);
       if (glyph.x < -20 || glyph.x > width + 20 || glyph.y < -20 || glyph.y > height + 20) continue;
       context.font = '600 ' + Math.round(glyph.size) + 'px monospace';
       context.fillStyle = glyph.bit ? '#def08d' : '#a7cd8e';
       context.globalAlpha = glyph.light;
-      context.fillText(glyph.bit, glyph.x, glyph.y);
+      if (box) waveOffset(waves, box.left + glyph.x, box.top + glyph.y, offset);
+      context.fillText(glyph.bit, glyph.x + (box ? offset.x : 0), glyph.y + (box ? offset.y : 0));
     }
     context.globalAlpha = 1;
     host.setAttribute('data-ready', '');
-    if (!quiet && (Math.abs(target - progress) > .001 || Math.abs(pointerYaw - yaw) > .001)) schedule();
+    if (!quiet && (waves.length || Math.abs(target - progress) > .001 || Math.abs(pointerYaw - yaw) > .001)) schedule();
     else previousTime = 0;
   }
 
@@ -270,6 +335,7 @@ export function setupScene(host) {
   preferences.observe(document.documentElement, { attributes: true, attributeFilter: ['data-reduced'] });
   addEventListener('scroll', schedule, { signal, passive: true });
   motion.addEventListener('change', schedule, { signal });
+  ripples.subscribe(schedule, signal);
   document.addEventListener('visibilitychange', schedule, { signal });
   host.addEventListener('pointermove', event => {
     if (event.pointerType !== 'mouse' || reduced()) return;

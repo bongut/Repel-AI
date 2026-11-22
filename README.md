@@ -45,7 +45,7 @@ The Reduce effects control and device motion preference suppress decorative move
 
 ## Credits and competition status
 
-The visual assets are original procedural Canvas and CSS. The browser uses fonts available on the visitor’s device. There are no third-party dependencies, downloaded media, or bundled fonts. The site’s `/sources` page lists learning references and design influences.
+The binary canopy and chapter illustrations use original procedural Canvas and CSS. The site bundles Bebas Neue, Cormorant Garamond, and PT Serif Caption with their license notices in `src/fonts/`. The site’s `/sources` page lists learning references and design influences.
 
 Codex generated the implementation and lesson drafts and assisted with testing. Treat this repository as a reference build for learning. The [Texas TSA copyright, original work, and AI policy](https://texastsa.org/wp-content/uploads/2026/10/Copyright-AI-and-Uniqueness-of-Student-Work.pdf) requires student-created work and allows GenAI only when the specific event permits it. Verify the current Webmaster guide and rubric with your advisor before reusing any material in a submission. Also verify the applicable citation style, forms, AI disclosure, any library or hosting restrictions, and submission procedure. Supply the team's real records using the official forms where required.
 

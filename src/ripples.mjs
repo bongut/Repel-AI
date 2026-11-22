@@ -2,8 +2,18 @@ const surfaces = [
   '.chapter', '.threshold', '.scene', '.chapter-header', '.reflection', '.progress-overview',
   '.progress-row', '.editorial-note', '.play-lab', '.work-output', '.button', '.header-inner nav a', '.effects'
 ].join(', ');
+const quietSurfaces = [
+  '.hero-copy', '.section-head', '.sample-section > :first-child', '.brand', '.chapter-nav a',
+  '.interior > :is(h1, p)', '.lesson-block > :is(h2, p, ul)', '.footer-inner > :is(p, a)'
+].join(', ');
 const onset = 80;
 const lifetime = 1750;
+const sampleInterval = 120;
+const sampleSpacing = 22;
+// A 66 px diameter is about three times a typical desktop pointer.
+const quietStartRadius = 6;
+const quietRadius = 33;
+const quietReach = quietRadius - quietStartRadius;
 let texture;
 
 function svg(name, attributes = {}) {
@@ -14,6 +24,16 @@ function svg(name, attributes = {}) {
 
 // Red and green encode the horizontal and vertical slope of a pair of wave crests.
 // Transparent water between crests lets earlier waves show through when they cross.
+function waveSlope(radius) {
+  const crest = radius - .58;
+  return Math.sin(crest * 16) * Math.exp(-(crest ** 2) / .05) * Math.min(1, (1 - radius) * 12);
+}
+
+function waveStrength(age, sizeFraction) {
+  const attack = Math.min(1, age / .20);
+  return Math.min(1, sizeFraction) * attack * attack * (3 - 2 * attack) * (1 - age * age) ** 2;
+}
+
 function waveTexture() {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 96;
@@ -25,18 +45,18 @@ function waveTexture() {
       const dx = (x + .5 - 48) / 48;
       const dy = (y + .5 - 48) / 48;
       const radius = Math.hypot(dx, dy);
-      const slope = Math.sin((radius - .58) * 16) * Math.exp(-((radius - .58) ** 2) / .050);
+      const slope = radius < 1 ? waveSlope(radius) : 0;
       const index = 4 * (y * 96 + x);
       image.data[index] = 128 + 126 * Math.sign(slope) * dx / radius;
       image.data[index + 1] = 128 + 126 * Math.sign(slope) * dy / radius;
-      image.data[index + 3] = radius < 1 ? 255 * Math.abs(slope) : 0;
+      image.data[index + 3] = 255 * Math.abs(slope);
     }
   }
   ctx.putImageData(image, 0, 0);
   return canvas.toDataURL();
 }
 
-function createSurface(target, definitions, id) {
+function createSurface(target, definitions, id, quiet) {
   const filter = svg('filter', {
     id, x: '-20%', y: '-40%', width: '140%', height: '180%', 'color-interpolation-filters': 'sRGB'
   });
@@ -44,16 +64,18 @@ function createSurface(target, definitions, id) {
   const map = svg('feMerge', { result: 'surface' });
   map.append(svg('feMergeNode', { in: 'still' }));
   const bend = svg('feDisplacementMap', {
-    in: 'SourceGraphic', in2: 'surface', scale: 13, xChannelSelector: 'R', yChannelSelector: 'G', result: 'bent'
+    in: 'SourceGraphic', in2: 'surface', scale: quiet ? 3 : 13,
+    xChannelSelector: 'R', yChannelSelector: 'G', result: 'bent'
   });
   // A little grazing light makes the same deformation legible on flat, dark cards.
   const light = svg('feColorMatrix', {
     in: 'surface', values: '0 0 0 0 .69  0 0 0 0 .87  0 0 0 0 .88  .09 .07 0 0 -.082'
   });
-  filter.append(stillWater, map, bend, light, svg('feComposite', { in2: 'bent', operator: 'atop' }));
+  filter.append(stillWater, map, bend);
+  if (!quiet) filter.append(light, svg('feComposite', { in2: 'bent', operator: 'atop' }));
   definitions.append(filter);
   target.style.filter = 'url(#' + id + ')';
-  return { filter, map, waves: [], serial: 0 };
+  return { filter, map, waves: [], serial: 0, quiet };
 }
 
 function addWave(state, x, y, reach, now) {
@@ -68,11 +90,58 @@ function addWave(state, x, y, reach, now) {
   state.waves.push({ image, transfer, alpha, layer, x, y, reach, born: now + onset });
 }
 
+// Displace the drawn glyphs while keeping their collision coordinates in the original scene.
+export function waveOffset(waves, x, y, offset) {
+  let horizontal = 0;
+  let vertical = 0;
+  for (const wave of waves) {
+    const dx = (x - wave.x) / wave.radius;
+    const dy = (y - wave.y) / wave.radius;
+    const distance = dx * dx + dy * dy;
+    if (distance <= .0225 || distance >= 1) continue;
+    const radius = Math.sqrt(distance);
+    const shift = waveSlope(radius) * wave.strength * 4 / radius;
+    horizontal += dx * shift;
+    vertical += dy * shift;
+  }
+  offset.x = Math.max(-3, Math.min(3, horizontal));
+  offset.y = Math.max(-3, Math.min(3, vertical));
+}
+
 export function wireRipples(signal, reduced) {
   const definitions = svg('svg', { class: 'ripple-definitions', 'aria-hidden': true, focusable: false });
   const active = new Map();
+  const ambient = [];
+  const activity = new EventTarget();
+  let lastAmbient;
+  let lastRead;
+  let viewportWaves = [];
   let serial = 0;
   let frame = 0;
+
+  function readWaves(now) {
+    if (now === lastRead) return viewportWaves;
+    lastRead = now;
+    while (ambient.length && now - ambient[0].born >= lifetime) ambient.shift();
+    const x = window.scrollX;
+    const y = window.scrollY;
+    viewportWaves = ambient.map(wave => {
+      const age = Math.max(0, (now - wave.born) / lifetime);
+      const radius = quietStartRadius + quietReach * age;
+      return { x: wave.x - x, y: wave.y - y, radius, strength: waveStrength(age, radius / quietRadius) };
+    });
+    return viewportWaves;
+  }
+
+  function sampleAmbient(event, now) {
+    if (lastAmbient && (now - lastAmbient.time < sampleInterval ||
+      Math.hypot(event.clientX - lastAmbient.x, event.clientY - lastAmbient.y) < sampleSpacing)) return;
+    const { clientX: x, clientY: y } = event;
+    ambient.push({ x: x + window.scrollX, y: y + window.scrollY, born: now + onset });
+    while (now - ambient[0].born >= lifetime) ambient.shift();
+    lastAmbient = { x, y, time: now };
+    activity.dispatchEvent(new Event('wave'));
+  }
 
   function release(target, state) {
     target.style.removeProperty('filter');
@@ -93,9 +162,8 @@ export function wireRipples(signal, reduced) {
           return false;
         }
         if (t <= 0) return true;
-        const radius = 24 + wave.reach * t;
-        const attack = Math.min(1, t / .20);
-        const strength = Math.min(1, radius / 110) * attack * attack * (3 - 2 * attack) * (1 - t * t) ** 2;
+        const radius = (state.quiet ? quietStartRadius : 24) + wave.reach * t;
+        const strength = waveStrength(t, radius / (state.quiet ? quietRadius : 110));
         wave.alpha.setAttribute('slope', strength.toFixed(3));
         wave.image.setAttribute('x', wave.x - radius);
         wave.image.setAttribute('y', wave.y - radius);
@@ -111,14 +179,16 @@ export function wireRipples(signal, reduced) {
   function sample(event) {
     const keyboard = event.type === 'focusin';
     if (reduced() || document.hidden) return;
-    const target = event.target.closest?.(surfaces);
-    if (!target || target.matches(':disabled, [aria-disabled="true"]')) return;
     if (keyboard ? !event.target.matches(':focus-visible') : event.pointerType !== 'mouse' || event.buttons) return;
     const now = performance.now();
+    if (!keyboard) sampleAmbient(event, now);
+    const surface = event.target.closest?.(surfaces);
+    const target = surface ?? (!keyboard && event.target.closest?.(quietSurfaces));
+    if (!target || target.matches(':disabled, [aria-disabled="true"]')) return;
     let state = active.get(target);
     if (state) {
-      if (now - state.last.time < 120) return;
-      if (!keyboard && Math.hypot(event.clientX - state.last.x, event.clientY - state.last.y) < 22) return;
+      if (now - state.last.time < sampleInterval) return;
+      if (!keyboard && Math.hypot(event.clientX - state.last.x, event.clientY - state.last.y) < sampleSpacing) return;
     }
     const bounds = target.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
@@ -126,13 +196,13 @@ export function wireRipples(signal, reduced) {
     if (!texture) return;
     if (!definitions.isConnected) document.body.append(definitions);
     if (!state) {
-      state = createSurface(target, definitions, 'water-surface-' + serial++);
+      state = createSurface(target, definitions, 'water-surface-' + serial++, !surface);
       active.set(target, state);
     }
     // Translate from the projected card (including the chapter orbit) into filter coordinates.
     const x = keyboard ? target.offsetWidth / 2 : (event.clientX - bounds.left) * target.offsetWidth / bounds.width;
     const y = keyboard ? target.offsetHeight / 2 : (event.clientY - bounds.top) * target.offsetHeight / bounds.height;
-    const reach = Math.min(255, Math.max(80, Math.min(target.offsetWidth, target.offsetHeight) * .83));
+    const reach = state.quiet ? quietReach : Math.min(255, Math.max(80, Math.min(target.offsetWidth, target.offsetHeight) * .83));
     addWave(state, x, y, reach, now);
     state.last = { x: event.clientX, y: event.clientY, time: now };
     if (!frame) frame = requestAnimationFrame(animate);
@@ -141,6 +211,9 @@ export function wireRipples(signal, reduced) {
   function clear() {
     cancelAnimationFrame(frame);
     frame = 0;
+    ambient.length = 0;
+    viewportWaves = [];
+    lastAmbient = undefined;
     for (const [target, state] of active) release(target, state);
   }
   document.addEventListener('pointermove', sample, { signal, passive: true });
@@ -149,4 +222,5 @@ export function wireRipples(signal, reduced) {
   const preference = new MutationObserver(() => { if (reduced()) clear(); });
   preference.observe(document.documentElement, { attributes: true, attributeFilter: ['data-reduced'] });
   signal.addEventListener('abort', () => { clear(); preference.disconnect(); definitions.remove(); }, { once: true });
+  return { readWaves, subscribe: (listener, signal) => activity.addEventListener('wave', listener, { signal }) };
 }

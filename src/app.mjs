@@ -233,14 +233,14 @@ function syncEffects() {
   control.disabled = motion.matches;
 }
 
-function wireDecorations(signal, entering) {
+function wireDecorations(signal, entering, ripples) {
   const scene = $('[data-scene]');
   import('./scene.mjs').then(({ setupScene, setupPortalWeather }) => {
     if (signal.aborted) return;
-    const cleanWeather = setupPortalWeather(isReduced);
+    const cleanWeather = setupPortalWeather(isReduced, ripples);
     signal.addEventListener('abort', cleanWeather, { once: true });
     if (scene) {
-      const clean = setupScene(scene);
+      const clean = setupScene(scene, ripples);
       signal.addEventListener('abort', clean, { once: true });
     }
   }).catch(() => { scene?.removeAttribute('data-ready'); });
@@ -297,7 +297,7 @@ function setup(entering = false) {
   scope = new AbortController();
   const { signal } = scope;
   wireSmoothScroll(signal, isReduced);
-  wireRipples(signal, isReduced);
+  const ripples = wireRipples(signal, isReduced);
   const main = $('#main');
   if (main.querySelector('.interior')) wireInteriorScroll(main, signal, isReduced);
   const curriculum = main.querySelector('.curriculum-stage');
@@ -346,7 +346,7 @@ function setup(entering = false) {
   }, { signal });
   syncEffects();
   paintProgress();
-  wireDecorations(signal, entering);
+  wireDecorations(signal, entering, ripples);
 }
 
 function focusDestination(url) {

@@ -1,4 +1,4 @@
-import { copyFile, mkdir, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pages, render } from '../src/render.mjs';
@@ -13,6 +13,7 @@ export async function build() {
   for (const file of ['app.mjs', 'content.mjs', 'field.mjs', 'model.mjs', 'motion.mjs', 'ripples.mjs', 'scene.mjs', 'style.css']) {
     await copyFile(join(root, 'src', file), join(assets, file));
   }
+  await cp(join(root, 'src', 'fonts'), join(assets, 'fonts'), { recursive: true });
   await writeFile(join(assets, 'field.png'), makeFallback());
   for (const path of pages.keys()) {
     const dir = join(dist, path);
