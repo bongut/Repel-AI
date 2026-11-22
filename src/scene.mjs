@@ -52,7 +52,7 @@ export function setupPortalWeather(reduced, ripples) {
     context.setTransform(dpi, 0, 0, dpi, 0, 0);
     surface = new Float32Array(Math.ceil(width / 12));
     rain.length = 0;
-    const count = Math.min(52, Math.ceil(width / 24));
+    const count = Math.min(32, Math.ceil(width / 40));
     for (let index = 0; index < count; index++) {
       rain.push({
         x: (index + .2 + Math.random() * .6) * width / count,

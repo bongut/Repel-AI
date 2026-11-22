@@ -48,6 +48,30 @@
 [hidden] { display: none !important; }
 html { background: var(--paper); scroll-behavior: smooth; }
 html[data-reduced] { scroll-behavior: auto; }
+.umbrella-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 46;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 49% 43%, #1b302f, var(--paper) 64%);
+  animation: umbrella-exit .45s ease-in-out 1.75s both;
+}
+.umbrella-intro svg { display: block; width: min(78vw, 31rem, 90vh); height: auto; }
+.umbrella-print {
+  fill: #e1efc8;
+  font: 400 48px var(--display);
+  letter-spacing: 3px;
+  animation: umbrella-ink .34s ease-out .86s both;
+}
+@keyframes umbrella-ink { from { opacity: 0; } to { opacity: 1; } }
+@keyframes umbrella-exit {
+  from { opacity: 1; }
+  to { opacity: 0; visibility: hidden; }
+}
+body:focus-within .umbrella-intro, [data-reduced] .umbrella-intro { display: none; }
+@media (prefers-reduced-motion: reduce) { .umbrella-intro { display: none; } }
 .route-rain {
   position: fixed;
   z-index: 45;

@@ -1,10 +1,9 @@
 import { modules, scenarios } from './content.mjs';
 import { openRainTransition, wireChapterTilt, wireInteriorScroll, wireSmoothScroll } from './motion.mjs';
 import { wireRipples } from './ripples.mjs';
-import { changeProgress, classify, decodeProgress, emptyProgress, formatPrompt, nextStep, scoreQuiz, storageKey, summarize } from './model.mjs';
+import { changeProgress, classify, decodeProgress, effectsKey, emptyProgress, formatPrompt, nextStep, scoreQuiz, storageKey, summarize } from './model.mjs';
 
 const $ = (selector, root = document) => root.querySelector(selector);
-const effectsKey = 'form-ai.reduce-effects';
 const motion = matchMedia('(prefers-reduced-motion: reduce)');
 const pointer = matchMedia('(pointer: fine)');
 let storageAvailable = true;
@@ -365,6 +364,7 @@ function focusDestination(url) {
 
 async function navigate(url, pop = false) {
   const current = ++navigationCounter;
+  $('.umbrella-intro')?.remove();
   navigation?.abort();
   navigation = new AbortController();
   const { signal } = navigation;
@@ -422,6 +422,10 @@ addEventListener('storage', event => {
 });
 motion.addEventListener('change', syncEffects);
 setup();
-navigation = new AbortController();
-openRainTransition(navigation.signal, isReduced, true)?.reveal();
+const intro = $('.umbrella-intro');
+if (intro) {
+  const exit = intro.getAnimations()[0];
+  if (exit) exit.finished.then(() => intro.remove(), () => intro.remove());
+  else intro.remove();
+}
 

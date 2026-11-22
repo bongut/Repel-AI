@@ -1,4 +1,5 @@
 import { modules, scenarios, sources } from './content.mjs';
+import { umbrellaIntro } from './intro.mjs';
 
 const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 const button = (url, label, style = 'primary') => '<a class="button ' + style + '" href="' + url + '"><span>' + label + '</span></a>';
@@ -174,8 +175,8 @@ export function render(path) {
     '<a href="' + url + '"' + (path === url ? ' aria-current="page"' : path.startsWith(url + '/') ? ' class="active"' : '') + '>' + name + '</a>').join('');
   return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
     '<meta name="description" content="A hands-on AI learning portal for grades 9–12. Explore foundations, practice, and ethics.">' +
-    '<meta name="theme-color" content="#0b1114"><title>' + escape(title) + ' · Repel AI</title><link rel="stylesheet" href="/assets/style.css">' +
-    '<script type="module" src="/assets/app.mjs"></script></head><body>' +
+    '<meta name="theme-color" content="#0b1114"><title>' + escape(title) + ' · Repel AI</title><link rel="preload" href="/assets/fonts/bebas-neue.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="/assets/style.css">' +
+    '<script type="module" src="/assets/app.mjs"></script></head><body>' + umbrellaIntro +
     '<a class="skip" href="#main">Skip to content</a><header class="site-header"><div class="shell header-inner">' +
     logo + '<nav aria-label="Main navigation">' + nav + '</nav>' + button('/learn', 'Start learning', 'primary header-cta') +
     '</div></header><main id="main" tabindex="-1"><noscript><p class="shell javascript-note">Enable JavaScript to use the experiments, assessments, and progress tracking.</p></noscript>' + body() + '</main>' +

@@ -1,6 +1,7 @@
 import { modules, samples } from './content.mjs';
 
 export const storageKey = 'form-ai.progress';
+export const effectsKey = 'form-ai.reduce-effects';
 export const emptyProgress = () => ({ version: 2, lessons: {}, exercises: {}, quizzes: {}, resume: null });
 
 export function decodeProgress(raw) {

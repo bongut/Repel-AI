@@ -1,4 +1,4 @@
-export function openRainTransition(signal, reduced, initial = false) {
+export function openRainTransition(signal, reduced) {
   if (reduced()) return null;
   const curtain = document.createElement('div');
   curtain.className = 'route-rain';
@@ -19,7 +19,7 @@ export function openRainTransition(signal, reduced, initial = false) {
     signal.removeEventListener('abort', clear);
   };
   signal.addEventListener('abort', clear, { once: true });
-  const covered = initial ? Promise.resolve() : curtain.animate(
+  const covered = curtain.animate(
     [{ opacity: 0 }, { opacity: 1 }],
     { duration: 190, easing: 'ease-in', fill: 'both' }
   ).finished.catch(() => {});
