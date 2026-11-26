@@ -1,6 +1,7 @@
 import { modules, scenarios } from './content.mjs';
 import { openRainTransition, wireChapterTilt, wireInteriorScroll, wireSmoothScroll } from './motion.mjs';
 import { wireRipples } from './ripples.mjs';
+import { playRippleSound } from './sound.mjs';
 import { changeProgress, classify, decodeProgress, effectsKey, emptyProgress, formatPrompt, nextStep, scoreQuiz, storageKey, summarize } from './model.mjs';
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -234,6 +235,7 @@ function syncEffects() {
 
 function wireDecorations(signal, entering, ripples) {
   const scene = $('[data-scene]');
+  const intro = $('.umbrella-intro');
   import('./scene.mjs').then(({ setupScene, setupPortalWeather }) => {
     if (signal.aborted) return;
     const cleanWeather = setupPortalWeather(isReduced, ripples);
@@ -242,7 +244,8 @@ function wireDecorations(signal, entering, ripples) {
       const clean = setupScene(scene, ripples);
       signal.addEventListener('abort', clean, { once: true });
     }
-  }).catch(() => { scene?.removeAttribute('data-ready'); });
+  }).catch(() => { scene?.removeAttribute('data-ready'); })
+    .finally(() => { intro?.setAttribute('data-portal-ready', ''); });
   if (isReduced()) return;
   const animations = new Set();
   const animate = (element, frames, options) => {
@@ -393,6 +396,13 @@ async function navigate(url, pop = false) {
 }
 
 document.addEventListener('click', event => {
+  if (!event.isTrusted || event.button !== 0 || isReduced()) return;
+  const button = event.target.closest('button, a.button');
+  if (!button || button.closest(':disabled, [aria-disabled="true"]')) return;
+  void playRippleSound();
+}, { capture: true });
+
+document.addEventListener('click', event => {
   const link = event.target.closest('a[href]');
   if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey ||
     link.target || link.hasAttribute('download')) return;
@@ -422,10 +432,4 @@ addEventListener('storage', event => {
 });
 motion.addEventListener('change', syncEffects);
 setup();
-const intro = $('.umbrella-intro');
-if (intro) {
-  const exit = intro.getAnimations()[0];
-  if (exit) exit.finished.then(() => intro.remove(), () => intro.remove());
-  else intro.remove();
-}
 
